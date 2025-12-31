@@ -7,7 +7,6 @@ export const getSubjects = async () => {
   const response = await axios.get(`${API_BASE_URL}/Subjects`);
   return response.data;
 };
-
 export const addSubject = async (subject: {
   title: string;
   day: string;
@@ -16,7 +15,20 @@ export const addSubject = async (subject: {
   const response = await axios.post(`${API_BASE_URL}/Subjects`, subject);
   return response.data;
 };
-
+export const updateSubject = async (
+  id: string,
+  updatedData: {
+    title?: string;
+    day?: string;
+    time?: string;
+  }
+) => {
+  const response = await axios.put(
+    `${API_BASE_URL}/Subjects/${id}`,
+    updatedData
+  );
+  return response.data;
+};
 export const deleteSubject = async (id: string) => {
   const response = await axios.delete(
     `${API_BASE_URL}/Subjects/${id}`

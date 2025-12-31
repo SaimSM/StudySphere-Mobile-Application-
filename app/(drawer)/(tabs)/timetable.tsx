@@ -1,6 +1,17 @@
-import { View, Text, Button, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  Button,
+  FlatList,
+  TouchableOpacity,
+} from 'react-native';
 import { useEffect, useState } from 'react';
-import { getSubjects, addSubject } from '../../../services/api';
+import {
+  getSubjects,
+  addSubject,
+  deleteSubject,
+  updateSubject,
+} from '../../../services/api';
 
 export default function TimetableScreen() {
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -16,11 +27,23 @@ export default function TimetableScreen() {
 
   const handleAdd = async () => {
     await addSubject({
-      title: 'Social Studies',
-      day: 'Tuesnesday',
-      time: '8:00 AM',
+      title: 'New Subject',
+      day: 'Friday',
+      time: '1:00 PM',
     });
-    loadSubjects(); // refresh list
+    loadSubjects();
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteSubject(id);
+    loadSubjects();
+  };
+
+  const handleUpdate = async (id: string) => {
+    await updateSubject(id, {
+      title: 'Updated Subject',
+    });
+    loadSubjects();
   };
 
   return (
@@ -31,9 +54,38 @@ export default function TimetableScreen() {
         data={subjects}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <Text>
-            {item.title} - {item.day} ({item.time})
-          </Text>
+          <View
+            style={{
+              marginVertical: 10,
+              padding: 10,
+              borderWidth: 1,
+              borderRadius: 6,
+            }}
+          >
+            <Text>
+              {item.title} - {item.day} ({item.time})
+            </Text>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                marginTop: 8,
+                justifyContent: 'space-between',
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => handleUpdate(item.id)}
+              >
+                <Text style={{ color: 'blue' }}>Update</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => handleDelete(item.id)}
+              >
+                <Text style={{ color: 'red' }}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
       />
     </View>
