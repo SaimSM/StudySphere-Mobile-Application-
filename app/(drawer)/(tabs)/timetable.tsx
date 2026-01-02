@@ -6,44 +6,80 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getSubjects,
   addSubject,
   deleteSubject,
   updateSubject,
-} from '../../../services/api';
+} from '../../../src/services/timetableApi';
+
+const STORAGE_KEY = 'subjects_cache';
 
 export default function TimetableScreen() {
   const [subjects, setSubjects] = useState<any[]>([]);
 
+  // ✅ LOAD SUBJECTS (API + CACHE)
   const loadSubjects = async () => {
-    const data = await getSubjects();
-    setSubjects(data);
+    try {
+      // Load cached data first
+      const cached = await AsyncStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        setSubjects(JSON.parse(cached));
+      }
+
+      // Fetch from API
+      const data = await getSubjects();
+      setSubjects(data);
+
+      // Save fresh data
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(data)
+      );
+    } catch (error) {
+      console.log('Network error, using cached data');
+    }
   };
 
   useEffect(() => {
     loadSubjects();
   }, []);
 
+  // ✅ ADD
   const handleAdd = async () => {
-    await addSubject({
-      title: 'New Subject',
-      day: 'Friday',
-      time: '1:00 PM',
-    });
-    loadSubjects();
+    try {
+      await addSubject({
+        title: 'New Subject',
+        day: 'Friday',
+        time: '1:00 PM',
+      });
+      loadSubjects();
+    } catch {
+      alert('Network error');
+    }
   };
 
+  // ✅ DELETE
   const handleDelete = async (id: string) => {
-    await deleteSubject(id);
-    loadSubjects();
+    try {
+      await deleteSubject(id);
+      loadSubjects();
+    } catch {
+      alert('Network error');
+    }
   };
 
+  // ✅ UPDATE
   const handleUpdate = async (id: string) => {
-    await updateSubject(id, {
-      title: 'Updated Subject',
-    });
-    loadSubjects();
+    try {
+      await updateSubject(id, {
+        title: 'Updated Subject',
+      });
+      loadSubjects();
+    } catch {
+      alert('Network error');
+    }
   };
 
   return (
@@ -69,8 +105,8 @@ export default function TimetableScreen() {
             <View
               style={{
                 flexDirection: 'row',
-                marginTop: 8,
                 justifyContent: 'space-between',
+                marginTop: 8,
               }}
             >
               <TouchableOpacity
