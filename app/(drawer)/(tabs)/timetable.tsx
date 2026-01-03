@@ -1,143 +1,171 @@
 import {
   View,
   Text,
-  TouchableOpacity,
   FlatList,
+  TouchableOpacity,
+  StyleSheet,
   Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import {
   getSubjects,
   addSubject,
-  deleteSubject,
   updateSubject,
+  deleteSubject,
 } from '../../../src/services/timetableApi';
 
-type Subject = {
-  id: string;
-  title: string;
-  day: string;
-  time: string;
-};
+const STORAGE_KEY = 'subjects_cache';
 
 export default function TimetableScreen() {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
 
+  // 🔹 Check internet
   useEffect(() => {
-    getSubjects().then(setSubjects);
+    const unsub = NetInfo.addEventListener(state => {
+      setIsOnline(!!state.isConnected);
+    });
+    return () => unsub();
   }, []);
 
-  // ✅ ADD AT TOP (UI FIRST)
+  // 🔹 Load from cache + API
+  const loadSubjects = async () => {
+    const cached = await AsyncStorage.getItem(STORAGE_KEY);
+    if (cached) setSubjects(JSON.parse(cached));
+
+    if (isOnline) {
+      try {
+        const apiData = await getSubjects();
+        setSubjects(apiData);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(apiData));
+      } catch {}
+    }
+  };
+
+  useEffect(() => {
+    loadSubjects();
+  }, [isOnline]);
+
+  // 🔹 SAVE LOCAL
+  const saveLocal = async (data: any[]) => {
+    setSubjects(data);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  };
+
+  // 🔹 ADD
   const handleAdd = async () => {
-    const newSubject: Subject = {
+    const newItem = {
       id: Date.now().toString(),
       title: 'New Subject',
-      day: 'Friday',
-      time: '1:00 PM',
+      day: 'Monday',
+      time: '10:00 AM',
     };
 
-    setSubjects(prev => [newSubject, ...prev]);
-    Alert.alert('Added', 'Subject added');
+    const updated = [newItem, ...subjects];
+    await saveLocal(updated);
 
-    try {
-      await addSubject(newSubject);
-    } catch {
-      Alert.alert('Error', 'Failed to save subject');
+    if (isOnline) {
+      try {
+        await addSubject(newItem);
+      } catch {}
     }
   };
 
-  // ✅ UPDATE LOCALLY
+  // 🔹 UPDATE
   const handleUpdate = async (id: string) => {
-    setSubjects(prev =>
-      prev.map(s =>
-        s.id === id ? { ...s, title: 'Updated Subject' } : s
-      )
+    const updated = subjects.map(item =>
+      item.id === id ? { ...item, title: 'Updated Subject' } : item
     );
 
-    try {
-      await updateSubject(id, { title: 'Updated Subject' });
-    } catch {
-      Alert.alert('Error', 'Update failed');
+    await saveLocal(updated);
+
+    if (isOnline) {
+      try {
+        await updateSubject(id, { title: 'Updated Subject' });
+      } catch {}
     }
   };
 
-  // ✅ DELETE LOCALLY
+  // 🔹 DELETE
   const handleDelete = async (id: string) => {
-    setSubjects(prev => prev.filter(s => s.id !== id));
-    Alert.alert('Deleted', 'Subject removed');
+    const updated = subjects.filter(item => item.id !== id);
+    await saveLocal(updated);
 
-    try {
-      await deleteSubject(id);
-    } catch {
-      Alert.alert('Error', 'Delete failed');
+    if (isOnline) {
+      try {
+        await deleteSubject(id);
+      } catch {}
     }
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <TouchableOpacity
-        onPress={handleAdd}
-        style={{
-          backgroundColor: '#0ea5e9',
-          padding: 14,
-          borderRadius: 10,
-          marginBottom: 12,
-        }}
-      >
-        <Text
-          style={{
-            color: 'white',
-            textAlign: 'center',
-            fontWeight: 'bold',
-          }}
-        >
-          + Add Subject
-        </Text>
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
+        <Text style={styles.addText}>+ Add Subject</Text>
       </TouchableOpacity>
 
-      {subjects.length === 0 ? (
-        <Text style={{ textAlign: 'center', marginTop: 40, color: '#777' }}>
-          No subjects added 📅
-        </Text>
-      ) : (
-        <FlatList
-          data={subjects}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <View
-              style={{
-                padding: 12,
-                borderWidth: 1,
-                borderRadius: 10,
-                marginBottom: 10,
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '600' }}>
-                {item.title}
-              </Text>
-              <Text style={{ color: '#555' }}>
-                {item.day} • {item.time}
-              </Text>
+      <FlatList
+        data={subjects}
+        keyExtractor={item => item.id}
+        ListEmptyComponent={
+          <Text style={styles.empty}>No timetable added</Text>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.sub}>
+              {item.day} • {item.time}
+            </Text>
 
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  marginTop: 8,
-                }}
-              >
-                <TouchableOpacity onPress={() => handleUpdate(item.id)}>
-                  <Text style={{ color: 'blue' }}>Update</Text>
-                </TouchableOpacity>
+            <View style={styles.row}>
+              <TouchableOpacity onPress={() => handleUpdate(item.id)}>
+                <Text style={styles.edit}>Edit</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                  <Text style={{ color: 'red' }}>Delete</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                <Text style={styles.delete}>Delete</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        />
-      )}
+          </View>
+        )}
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { padding: 20 },
+  addBtn: {
+    backgroundColor: '#4f46e5',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  addText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f9fafb',
+    marginBottom: 12,
+  },
+  title: { fontSize: 16, fontWeight: '600' },
+  sub: { color: '#6b7280', marginTop: 4 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  edit: { color: '#2563eb' },
+  delete: { color: '#dc2626' },
+  empty: {
+    textAlign: 'center',
+    marginTop: 50,
+    color: '#9ca3af',
+  },
+});
