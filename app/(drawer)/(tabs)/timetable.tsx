@@ -1,12 +1,11 @@
 import {
   View,
   Text,
-  Button,
-  FlatList,
   TouchableOpacity,
+  FlatList,
+  Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getSubjects,
   addSubject,
@@ -14,116 +13,131 @@ import {
   updateSubject,
 } from '../../../src/services/timetableApi';
 
-const STORAGE_KEY = 'subjects_cache';
+type Subject = {
+  id: string;
+  title: string;
+  day: string;
+  time: string;
+};
 
 export default function TimetableScreen() {
-  const [subjects, setSubjects] = useState<any[]>([]);
-
-  // ✅ LOAD SUBJECTS (API + CACHE)
-  const loadSubjects = async () => {
-    try {
-      // Load cached data first
-      const cached = await AsyncStorage.getItem(STORAGE_KEY);
-      if (cached) {
-        setSubjects(JSON.parse(cached));
-      }
-
-      // Fetch from API
-      const data = await getSubjects();
-      setSubjects(data);
-
-      // Save fresh data
-      await AsyncStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(data)
-      );
-    } catch (error) {
-      console.log('Network error, using cached data');
-    }
-  };
+  const [subjects, setSubjects] = useState<Subject[]>([]);
 
   useEffect(() => {
-    loadSubjects();
+    getSubjects().then(setSubjects);
   }, []);
 
-  // ✅ ADD
+  // ✅ ADD AT TOP (UI FIRST)
   const handleAdd = async () => {
+    const newSubject: Subject = {
+      id: Date.now().toString(),
+      title: 'New Subject',
+      day: 'Friday',
+      time: '1:00 PM',
+    };
+
+    setSubjects(prev => [newSubject, ...prev]);
+    Alert.alert('Added', 'Subject added');
+
     try {
-      await addSubject({
-        title: 'New Subject',
-        day: 'Friday',
-        time: '1:00 PM',
-      });
-      loadSubjects();
+      await addSubject(newSubject);
     } catch {
-      alert('Network error');
+      Alert.alert('Error', 'Failed to save subject');
     }
   };
 
-  // ✅ DELETE
+  // ✅ UPDATE LOCALLY
+  const handleUpdate = async (id: string) => {
+    setSubjects(prev =>
+      prev.map(s =>
+        s.id === id ? { ...s, title: 'Updated Subject' } : s
+      )
+    );
+
+    try {
+      await updateSubject(id, { title: 'Updated Subject' });
+    } catch {
+      Alert.alert('Error', 'Update failed');
+    }
+  };
+
+  // ✅ DELETE LOCALLY
   const handleDelete = async (id: string) => {
+    setSubjects(prev => prev.filter(s => s.id !== id));
+    Alert.alert('Deleted', 'Subject removed');
+
     try {
       await deleteSubject(id);
-      loadSubjects();
     } catch {
-      alert('Network error');
-    }
-  };
-
-  // ✅ UPDATE
-  const handleUpdate = async (id: string) => {
-    try {
-      await updateSubject(id, {
-        title: 'Updated Subject',
-      });
-      loadSubjects();
-    } catch {
-      alert('Network error');
+      Alert.alert('Error', 'Delete failed');
     }
   };
 
   return (
     <View style={{ padding: 20 }}>
-      <Button title="Add Subject" onPress={handleAdd} />
+      <TouchableOpacity
+        onPress={handleAdd}
+        style={{
+          backgroundColor: '#0ea5e9',
+          padding: 14,
+          borderRadius: 10,
+          marginBottom: 12,
+        }}
+      >
+        <Text
+          style={{
+            color: 'white',
+            textAlign: 'center',
+            fontWeight: 'bold',
+          }}
+        >
+          + Add Subject
+        </Text>
+      </TouchableOpacity>
 
-      <FlatList
-        data={subjects}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View
-            style={{
-              marginVertical: 10,
-              padding: 10,
-              borderWidth: 1,
-              borderRadius: 6,
-            }}
-          >
-            <Text>
-              {item.title} - {item.day} ({item.time})
-            </Text>
-
+      {subjects.length === 0 ? (
+        <Text style={{ textAlign: 'center', marginTop: 40, color: '#777' }}>
+          No subjects added 📅
+        </Text>
+      ) : (
+        <FlatList
+          data={subjects}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
             <View
               style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginTop: 8,
+                padding: 12,
+                borderWidth: 1,
+                borderRadius: 10,
+                marginBottom: 10,
               }}
             >
-              <TouchableOpacity
-                onPress={() => handleUpdate(item.id)}
-              >
-                <Text style={{ color: 'blue' }}>Update</Text>
-              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '600' }}>
+                {item.title}
+              </Text>
+              <Text style={{ color: '#555' }}>
+                {item.day} • {item.time}
+              </Text>
 
-              <TouchableOpacity
-                onPress={() => handleDelete(item.id)}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  marginTop: 8,
+                }}
               >
-                <Text style={{ color: 'red' }}>Delete</Text>
-              </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleUpdate(item.id)}>
+                  <Text style={{ color: 'blue' }}>Update</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                  <Text style={{ color: 'red' }}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
     </View>
   );
 }
